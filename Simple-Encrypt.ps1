@@ -1,33 +1,47 @@
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "SilentlyContinue"
 
-$filetomodify = "./new.txt"
+$filetomodify = "checkpoints.txt"
 $tmpfile = "tmp.txt"
+
+& .\Load-Env.ps1
+
+$marshal = [System.Runtime.InteropServices.Marshal]
 $asstream = [System.IO.MemoryStream]::new()
 $streamwriter = [System.IO.StreamWriter]::new($asstream)
 $streamwriter.Write($env:password)
 $streamwriter.Flush()
-$pwdhash = Get-FileHash -InputStream $asstream | 
-    Select-Object Hash
-$pwdarr = 
-& .\Load-Env.ps1
+$pwdhash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($asstream)
 
-switch ($args[0]) {
-    "Encrypt" {
-        Get-Content $filetomodify > $tmpfile
-        Remove-Item $filetomodify
-        Get-Content $tmpfile |
-        Foreach-Object {
-            $_ | ConvertTo-SecureString -AsPlainText -Force |
-            ConvertFrom-SecureString -SecureKey $arr >> new.txt
+$behavior = $args[0]
+$loop = $true
+
+while ($loop) {
+
+    switch ($behavior) {
+        "encrypt" {
+            Get-Content $filetomodify > $tmpfile
+            Remove-Item $filetomodify
+            Get-Content $tmpfile |
+            Foreach-Object {
+                $_ | ConvertTo-SecureString -AsPlainText -Force |
+                ConvertFrom-SecureString -Key $pwdhash >> $filetomodify
+            }
+            Remove-Item $tmpfile
+            $loop = $false; break
         }
-        Remove-Item $tmpfile
-        break
-    }
-    "Decrypt" {
+        "decrypt" {
+            Get-Content $filetomodify > $tmpfile
+            Remove-Item $filetomodify
+            Get-Content $tmpfile |
+            Foreach-Object {
+                $secure = $_ | ConvertTo-SecureString -key $pwdhash
+                $ptr = $marshal::SecureStringToBSTR($secure) 
+                $marshal::PtrToStringAuto($ptr) >> $filetomodify
+            }
+            Remove-Item $tmpfile
+            $loop = $false; break
+        }
         
-        break
+        default {$behavior = Read-Host "Please choose whether you wish to encrypt or decrypt `"$(Split-Path $filetomodify -Leaf)`""}
     }
-
-    default {echo hihihihihi}
 }
-#Get-Item .\checkpoints.txt -
