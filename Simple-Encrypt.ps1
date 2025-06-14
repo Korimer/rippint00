@@ -12,7 +12,7 @@ $streamwriter.Write($env:password)
 $streamwriter.Flush()
 $pwdhash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($asstream)
 
-$behavior = $args[0]
+$behavior = $args[0].ToString().ToLower()
 $loop = $true
 
 while ($loop) {
