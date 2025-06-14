@@ -1,9 +1,9 @@
 $ErrorActionPreference = "SilentlyContinue"
 
-$filetomodify = "checkpoints.txt"
-$tmpfile = "tmp.txt"
-
 & .\Load-Env.ps1
+
+$filetomodify = $env:encryption_target
+$tmpfile = "tmp.txt"
 
 $marshal = [System.Runtime.InteropServices.Marshal]
 $asstream = [System.IO.MemoryStream]::new()
@@ -41,6 +41,6 @@ while ($loop) {
             $loop = $false; break
         }
         
-        default {$behavior = Read-Host "Please choose whether you wish to encrypt or decrypt `"$(Split-Path $filetomodify -Leaf)`""}
+        default {$behavior = Read-Host "Please choose whether you wish to 𝐞͟𝐧͟𝐜͟𝐫͟𝐲͟𝐩͟𝐭 or ͟𝐝͟𝐞͟𝐜͟𝐫͟𝐲͟𝐩͟𝐭͟:`"$(Split-Path $filetomodify -Leaf)`""}
     }
 }
