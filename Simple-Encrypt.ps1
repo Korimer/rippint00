@@ -16,15 +16,14 @@ $behavior = $args[0].ToString().ToLower()
 $loop = $true
 
 while ($loop) {
-
     switch ($behavior) {
         "encrypt" {
             Get-Content $filetomodify > $tmpfile
             Remove-Item $filetomodify
-            Get-Content $tmpfile |
+            Get-Content $tmpfile -Encoding utf8 |
             Foreach-Object {
                 $_ | ConvertTo-SecureString -AsPlainText -Force |
-                ConvertFrom-SecureString -Key $pwdhash >> $filetomodify
+                ConvertFrom-SecureString -Key $pwdhash | Out-File $filetomodify -Encoding utf8 -Append
             }
             Remove-Item $tmpfile
             $loop = $false; break
@@ -32,11 +31,11 @@ while ($loop) {
         "decrypt" {
             Get-Content $filetomodify > $tmpfile
             Remove-Item $filetomodify
-            Get-Content $tmpfile |
+            Get-Content $tmpfile -Encoding utf8 |
             Foreach-Object {
                 $secure = $_ | ConvertTo-SecureString -key $pwdhash
                 $ptr = $marshal::SecureStringToBSTR($secure) 
-                $marshal::PtrToStringAuto($ptr) >> $filetomodify
+                $marshal::PtrToStringAuto($ptr) | Out-File $filetomodify -Encoding utf8 -Append
             }
             Remove-Item $tmpfile
             $loop = $false; break
