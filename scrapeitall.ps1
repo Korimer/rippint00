@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $destination = "sitemap.xml"
 $baseurl = "angusnicneven.com"
-$escapeafter = 2000
+$escapeafter = 2000 # max number of links to visit
+$waitsecs = 30 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
 
 
 $xmlprefs = @{
@@ -42,7 +43,7 @@ while ($null -ne ($cur = $tovisit.First)) {
     $escape++
     if ($escape -ge $escapeafter) {break;}
 
-    while ($timer.ElapsedMilliseconds -lt 30000) {
+    while ($timer.ElapsedMilliseconds -lt ($waitsecs * 1000)) {
         Start-Sleep -Seconds 1
     }
 }
