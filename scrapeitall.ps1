@@ -1,15 +1,14 @@
 $ErrorActionPreference = "Stop"
+
 $destination = "sitemap.xml"
 $baseurl = "angusnicneven.com"
+$escapeafter = 2000
+
 
 $xmlprefs = @{
     Indent = $true
     IndentChars = "	" # this is a tab btw
 }
-
-[System.Xml.XmlWriterSettings]$settings = [System.Xml.XmlWriterSettings]::new()
-foreach ($pref in $xmlprefs.Keys) {$settings.$pref = $xmlprefs[$pref]}
-# [System.Xml.XmlWriter]$writer = [System.Xml.XmlWriter]::create($destination,$settings)
 
 # convinence
 $SYShashset = [System.Collections.Generic.HashSet[string]]
@@ -20,34 +19,51 @@ $PageMatcher = "^(?>(?:.*\/)?)(.*)$" # Captures the name of the trailing page, m
 $pgs = @{}
 $tovisit = [System.Collections.Generic.LinkedList[string]]::new()
 $tovisit.Add("")
-
-# $writer.WriteWhitespace("`n`n")
-# $writer.WriteComment("Sup! You're looking at an xml sitemap. Should be pretty self-explanatory, to be honest.")
-# $writer.WriteWhitespace("`n`n")
+$timer = [System.Diagnostics.Stopwatch]::StartNew()
 
 $escape = 0
 
 while ($null -ne ($cur = $tovisit.First)) {
+    $timer.Restart()
     $tovisit.RemoveFirst()
-    $curpg = $cur.Value
+    $curpg = $cur.Value.toString()
     "Visiting $baseurl/$curpg"
+
+    # Dude, pipes are awesome
     (Invoke-WebRequest -Uri "$baseurl/$curpg").Links.href | Where-Object {$_ -ne $null -and $_ -match $SiteMatcher} | ForEach-Object {
-        $link = ($_ | Select-String -Pattern $PageMatcher).Matches.Groups[1] # Where-Object validation means this should never be null
+        $link = ($_ | Select-String -Pattern $PageMatcher).Matches.Groups[1].ToString() # Where-Object validation means this should never be null
         if (-not $pgs.ContainsKey($link)) {
-            $pgs[$link] = $SYShashset::new()
+            $pgs.$link = $SYShashset::new()
             $tovisit.Add($link) >> $null
         }
         $pgs[$link].Add($curpg) >> $null
     }
-    $escape++
-    if ($escape -ge 25) {break;}
-}
-$pgs.Keys | % {$_.Value}
-echo "$escape pages visited. Found $($pgs.Count) unique links."
 
-#obviously just having fun experimenting with xmlwriter stuff
-# $writer.WriteStartElement("Pages","b")
-# $writer.WriteElementString("new","line")
-# $writer.WriteEndElement()
-# $writer.Flush()
-# $writer.Close()
+    $escape++
+    if ($escape -ge $escapeafter) {break;}
+
+    while ($timer.ElapsedMilliseconds -lt 30000) {
+        Start-Sleep -Seconds 1
+    }
+}
+
+[System.Xml.XmlWriterSettings]$settings = [System.Xml.XmlWriterSettings]::new()
+foreach ($pref in $xmlprefs.Keys) {$settings.$pref = $xmlprefs[$pref]}
+[System.Xml.XmlWriter]$writer = [System.Xml.XmlWriter]::create($destination,$settings)
+
+$writer.WriteWhitespace("`n`n")
+$writer.WriteComment("Sup! You're looking at an xml sitemap. Should be pretty self-explanatory, to be honest.")
+$writer.WriteWhitespace("`n`n")
+$writer.WriteStartElement("Pages")
+
+foreach ($key in $pgs.Keys) {
+    $writer.WriteStartElement("Page")
+    $writer.WriteAttributeString("Link","\$key")
+    $pgs[$key] | Foreach-Object {$writer.WriteElementString("From",$_)}
+    $writer.WriteEndElement()
+}
+
+$writer.Flush()
+$writer.Close()
+
+echo "$escape pages visited. Found $($pgs.Count) unique links."
