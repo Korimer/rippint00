@@ -15,4 +15,8 @@ Pages like those can be added to checkpoints.txt, and the crawler will include t
 # sitemap.xml?
 Well, I've gotta save the results of the script somewhere. That's (by default) where.
 
-# 
+# Is this a zero day exploit?
+People like you trigger me.. I'll ignore it.
+
+# Wait hold on did you say .env
+lol
