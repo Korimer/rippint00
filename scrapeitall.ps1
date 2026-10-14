@@ -1,10 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $destination = "sitemap.xml"
-$baseurl = "angusnicneven.com"
-$escapeafter = 2000 # max number of links to visit
-$waitsecs = 30 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
-
+$baseurl = "angusnicneven.com/index"
+$allowedhosts = @(
+    "sw.eusv.net"
+    "depthk027.catsleydabluecatboi.xyz"
+)
+$escapeafter = 9999999 # max number of links to visit
+$waitsecs = 0 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
 
 $xmlprefs = @{
     Indent = $true
@@ -30,8 +33,12 @@ while ($null -ne ($cur = $tovisit.First)) {
     $curpg = $cur.Value.toString()
     "Visiting $baseurl/$curpg"
 
+    if ($curpg.StartsWith("mailto")) {
+      continue
+    }
+
     # Dude, pipes are awesome
-    (Invoke-WebRequest -Uri "$baseurl/$curpg").Links.href | Where-Object {$_ -ne $null -and $_ -match $SiteMatcher} | ForEach-Object {
+    (Invoke-WebRequest -Uri "$baseurl/$curpg" -AllowInsecureRedirect).Links.href | Where-Object {$_ -ne $null -and $_ -match $SiteMatcher} | ForEach-Object {
         $link = ($_ | Select-String -Pattern $PageMatcher).Matches.Groups[1].ToString() # Where-Object validation means this should never be null
         if (-not $pgs.ContainsKey($link)) {
             $pgs.$link = $SYShashset::new()
@@ -58,6 +65,10 @@ $writer.WriteWhitespace("`n`n")
 $writer.WriteStartElement("Pages")
 
 foreach ($key in $pgs.Keys) {
+    # md
+    $fname = $key
+    $pgs[$key] | % {"[[$_]]"} | Out-File -Encoding utf8 "obsidian/$key.md"
+    # xml
     $writer.WriteStartElement("Page")
     $writer.WriteAttributeString("Link","\$key")
     $pgs[$key] | Foreach-Object {$writer.WriteElementString("From",$_)}
