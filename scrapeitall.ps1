@@ -8,7 +8,7 @@ $allowedhosts = @(
   "depthk027.catsleydabluecatboi.xyz"
 )
 $escapeafter = 99999999 # max number of links to visit
-$waitsecs = 0 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
+$waitsecs = 1 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
 
 $pgs = @{}
 $tovisit = [System.Collections.Generic.LinkedList[Uri]]::new()
@@ -21,7 +21,7 @@ function Screen-Ref {
   )
 
   $uri = $null
-  $canConvert = if ($null -eq $Parent) {
+  $converted = if ($null -eq $Parent) {
     # If no parent is given, assert the link is absolute
     [Uri]::TryCreate(
       [string]$PotentialLink,
@@ -37,8 +37,14 @@ function Screen-Ref {
     )
   }
   # Either way, the resulting uri is guaranteed to be absolute
+  
+  $validLink = if ($converted) {
+    $uri.DnsSafeHost -in $allowedhosts
+  } else {
+    $false
+  }
 
-  if ($canConvert) {
+  if ($validLink) {
     if (-not($pgs.ContainsKey($uri))) {
       $pgs[$uri] = $SYShashset::new()
       $tovisit.Add($uri) | Out-Null
@@ -48,7 +54,10 @@ function Screen-Ref {
     }
   }
   else {
-    Write-Host "link ""$potentialLink"" from page $uri is not a valid link!"
+    $errstr = "link ""$potentialLink"""
+    if ($null -ne $Parent) { $errstr += " from page $Parent" }
+    $errstr += " is not a valid liink!"
+    Write-Host $errstr
   }
 }
 
@@ -63,8 +72,13 @@ while ($null -ne ($curNode = $tovisit.First)) {
   $curUri = $curNode.Value
   Write-Host "visiting $curUri"
 
-  $page = Invoke-WebRequest -Uri $curUri -AllowInsecureRedirect
-  $links = $page.Links.href 
+  try {
+    $page = Invoke-WebRequest -Uri $curUri -AllowInsecureRedirect
+    $links = $page.Links.href 
+  } catch {
+    Write-Warning "Error on ${curUri}:"
+    Write-Warning $_
+  }
 
   foreach ($link in $links) {
     Screen-Ref -PotentialLink $link -Parent $curUri
