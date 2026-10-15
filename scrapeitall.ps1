@@ -1,81 +1,110 @@
 $ErrorActionPreference = "Stop"
 
-$destination = "sitemap.xml"
-$baseurl = "angusnicneven.com/index"
+$checkpointsFile = "checkpoints.txt"
+$destinationFolder = "obsidian"
 $allowedhosts = @(
-    "sw.eusv.net"
-    "depthk027.catsleydabluecatboi.xyz"
+  "angusnicneven.com"
+  "sw.eusv.net"
+  "depthk027.catsleydabluecatboi.xyz"
 )
-$escapeafter = 9999999 # max number of links to visit
+$escapeafter = 99999999 # max number of links to visit
 $waitsecs = 0 # Time (in seconds) to wait between page visits. If you dont wanna ddoss someone, it's probably nice to keep it relatively large. lol.
 
-$xmlprefs = @{
-    Indent = $true
-    IndentChars = "	" # this is a tab btw
-}
-
-# convinence
-$SYShashset = [System.Collections.Generic.HashSet[string]]
-$escapedurl = $baseurl -replace "([.+*?^$)(\\\[\]}{|])", '(\$1)'
-$SiteMatcher = "^(?:(?:https?:\/\/)?(?:www\.)?$escapedurl|(?!https?:\/\/|www\.))" # Confirms that a link is either local or referencing the site you wanna map.
-$PageMatcher = "^(?>(?:.*\/)?)(.*)$" # Captures the name of the trailing page, minus the url and such 
-
 $pgs = @{}
-$tovisit = [System.Collections.Generic.LinkedList[string]]::new()
-$tovisit.Add("")
+$tovisit = [System.Collections.Generic.LinkedList[Uri]]::new()
+
+$SYShashset = [System.Collections.Generic.HashSet[string]]
+function Screen-Ref {
+  param (
+    [Parameter(Mandatory=$true)][string]$PotentialLink,
+    [uri]$Parent = $null
+  )
+
+  $uri = $null
+  $canConvert = if ($null -eq $Parent) {
+    # If no parent is given, assert the link is absolute
+    [Uri]::TryCreate(
+      [string]$PotentialLink,
+      [System.UriKind]::Absolute,
+      [ref]$uri
+    )
+  } else {
+    # If a parent is given, the link can be local
+    [Uri]::TryCreate(
+      [Uri]$Parent,
+      [string]$PotentialLink,
+      [ref]$uri
+    )
+  }
+  # Either way, the resulting uri is guaranteed to be absolute
+
+  if ($canConvert) {
+    if (-not($pgs.ContainsKey($uri))) {
+      $pgs[$uri] = $SYShashset::new()
+      $tovisit.Add($uri) | Out-Null
+    }
+    if ($null -ne $Parent) {
+      $pgs[$Parent].Add($uri) | Out-Null
+    }
+  }
+  else {
+    Write-Host "link ""$potentialLink"" from page $uri is not a valid link!"
+  }
+}
+
+Get-Content $checkpointsFile | % { Screen-Ref -PotentialLink $_ }
+
+$SYShashset = [System.Collections.Generic.HashSet[string]]
 $timer = [System.Diagnostics.Stopwatch]::StartNew()
-
 $escape = 0
+while ($null -ne ($curNode = $tovisit.First)) {
+  $timer.Restart()
+  $tovisit.RemoveFirst()
+  $curUri = $curNode.Value
+  Write-Host "visiting $curUri"
 
-while ($null -ne ($cur = $tovisit.First)) {
-    $timer.Restart()
-    $tovisit.RemoveFirst()
-    $curpg = $cur.Value.toString()
-    "Visiting $baseurl/$curpg"
+  $page = Invoke-WebRequest -Uri $curUri -AllowInsecureRedirect
+  $links = $page.Links.href 
 
-    if ($curpg.StartsWith("mailto")) {
-      continue
-    }
+  foreach ($link in $links) {
+    Screen-Ref -PotentialLink $link -Parent $curUri
+  }
+  
+  $escape++
+  if ($escape -ge $escapeafter) {break;}
 
-    # Dude, pipes are awesome
-    (Invoke-WebRequest -Uri "$baseurl/$curpg" -AllowInsecureRedirect).Links.href | Where-Object {$_ -ne $null -and $_ -match $SiteMatcher} | ForEach-Object {
-        $link = ($_ | Select-String -Pattern $PageMatcher).Matches.Groups[1].ToString() # Where-Object validation means this should never be null
-        if (-not $pgs.ContainsKey($link)) {
-            $pgs.$link = $SYShashset::new()
-            $tovisit.Add($link) >> $null
-        }
-        $pgs[$link].Add($curpg) >> $null
-    }
-
-    $escape++
-    if ($escape -ge $escapeafter) {break;}
-
-    while ($timer.ElapsedMilliseconds -lt ($waitsecs * 1000)) {
-        Start-Sleep -Seconds 1
-    }
+  while ($timer.ElapsedMilliseconds -lt ($waitsecs * 1000)) {
+    Start-Sleep -Seconds 1
+  }
 }
 
-[System.Xml.XmlWriterSettings]$settings = [System.Xml.XmlWriterSettings]::new()
-foreach ($pref in $xmlprefs.Keys) {$settings.$pref = $xmlprefs[$pref]}
-[System.Xml.XmlWriter]$writer = [System.Xml.XmlWriter]::create($destination,$settings)
+function Name-Page {
+  param ([uri]$uri, [switch]$LocalRef)
+  $shortname = $uri.PathAndQuery
+  $len = $shortname.Length
+  if ($len -gt 1) {
+    $shortname = $shortname.Substring(1,$len-1)
+  }
+  $encoded = [System.Net.WebUtility]::UrlEncode($shortname)
+  if ($localRef) {
+    if (-not($pgs.ContainsKey($uri))) {
+      return "!![[$($encoded)]]!!"
+    } else {
+      return "[[$($encoded)]]"
+    }
+  } else {
+    return $encoded
+  }
+}
 
-$writer.WriteWhitespace("`n`n")
-$writer.WriteComment("Sup! You're looking at an xml sitemap. Should be pretty self-explanatory, to be honest.")
-$writer.WriteWhitespace("`n`n")
-$writer.WriteStartElement("Pages")
-
+$saveFolder = Resolve-Path $destinationFolder
+New-Item -ItemType Directory -Force $saveFolder
 foreach ($key in $pgs.Keys) {
-    # md
-    $fname = $key
-    $pgs[$key] | % {"[[$_]]"} | Out-File -Encoding utf8 "obsidian/$key.md"
-    # xml
-    $writer.WriteStartElement("Page")
-    $writer.WriteAttributeString("Link","\$key")
-    $pgs[$key] | Foreach-Object {$writer.WriteElementString("From",$_)}
-    $writer.WriteEndElement()
+  $filename = "$saveFolder/$(Name-Page $key).md"
+  &{
+    "[$key]($key)"
+    $pgs[$key] | % { Name-Page $_ -LocalRef }
+  } | Out-File -Encoding utf8 $filename
 }
-
-$writer.Flush()
-$writer.Close()
 
 echo "$escape pages visited. Found $($pgs.Count) unique links."
