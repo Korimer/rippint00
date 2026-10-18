@@ -1,2 +1,4 @@
 .env
 sitemap.xml
+obsidian/*
+!obsidian/placeholder.txt.
